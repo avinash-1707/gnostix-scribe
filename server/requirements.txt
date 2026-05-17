@@ -10,3 +10,9 @@ passlib[bcrypt]==1.7.4
 bcrypt==4.0.1
 python-multipart==0.0.20
 email-validator==2.2.0
+langgraph==0.2.60
+langchain-google-genai==2.0.7
+google-genai==0.3.0
+trafilatura==1.12.2
+python-frontmatter==1.1.0
+cloudinary==1.41.0
