@@ -1,5 +1,7 @@
 "use client";
 
+import { motion } from "motion/react";
+import { Check, Loader2, Minus, X } from "lucide-react";
 import type { NodeEvent, NodeStatus } from "@/lib/api";
 
 const NODE_ORDER: { name: string; label: string }[] = [
@@ -48,19 +50,19 @@ function deriveRows(events: NodeEvent[]): Map<string, NodeRowState> {
 function StatusIcon({ status }: { status: NodeRowState["status"] }) {
   if (status === "running") {
     return (
-      <span
+      <Loader2
         aria-label="running"
-        className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent"
+        className="h-3.5 w-3.5 animate-spin text-sky-400"
       />
     );
   }
   if (status === "done") {
-    return <span aria-label="done" className="text-green-600">✓</span>;
+    return <Check aria-label="done" className="h-3.5 w-3.5 text-emerald-400" />;
   }
   if (status === "error") {
-    return <span aria-label="error" className="text-red-600">✕</span>;
+    return <X aria-label="error" className="h-3.5 w-3.5 text-rose-400" />;
   }
-  return <span aria-label="pending" className="text-gray-400">–</span>;
+  return <Minus aria-label="pending" className="h-3.5 w-3.5 text-white/30" />;
 }
 
 interface AgentProgressPanelProps {
@@ -80,55 +82,70 @@ export default function AgentProgressPanel({
       ? "Complete"
       : terminal === "ERROR"
         ? "Failed"
-        : "Processing…";
+        : "Processing";
+  const headerToneCls =
+    terminal === "DONE"
+      ? "text-emerald-300 bg-emerald-500/[0.08] border-emerald-500/[0.18]"
+      : terminal === "ERROR"
+        ? "text-rose-300 bg-rose-500/[0.08] border-rose-500/[0.18]"
+        : "text-sky-300 bg-sky-500/[0.08] border-sky-500/[0.18]";
 
   return (
-    <section className="rounded-lg border border-gray-200 bg-white">
-      <header className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
-        <h3 className="text-sm font-semibold text-gray-900 break-words">
+    <motion.section
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, ease: [0.25, 0.4, 0.25, 1] as const }}
+      className="overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.02] backdrop-blur-sm"
+    >
+      <header className="flex items-center justify-between gap-3 border-b border-white/[0.06] px-5 py-3.5">
+        <h3 className="min-w-0 text-sm font-medium text-white/90 break-words">
           {topic}
         </h3>
         <span
-          className={`text-xs font-medium ${
-            terminal === "DONE"
-              ? "text-green-600"
-              : terminal === "ERROR"
-                ? "text-red-600"
-                : "text-blue-600"
-          }`}
+          className={`shrink-0 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium uppercase tracking-wider ${headerToneCls}`}
         >
+          {terminal === null && (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          )}
           {headerLabel}
         </span>
       </header>
-      <ul className="divide-y divide-gray-100">
-        {NODE_ORDER.map(({ name, label }) => {
+
+      <ul className="divide-y divide-white/[0.05]">
+        {NODE_ORDER.map(({ name, label }, i) => {
           const row = rows.get(name)!;
+          const isActive = row.status === "running";
           return (
             <li
               key={name}
-              className="flex flex-col gap-1 px-4 py-2 sm:flex-row sm:items-center sm:gap-3"
+              className={`flex flex-col gap-1 px-5 py-2.5 sm:flex-row sm:items-center sm:gap-4 transition-colors ${
+                isActive ? "bg-white/[0.02]" : ""
+              }`}
             >
-              <span className="flex w-6 items-center justify-center">
+              <span className="flex w-5 items-center justify-center">
                 <StatusIcon status={row.status} />
               </span>
-              <span className="flex-1 text-sm font-medium text-gray-900">
+              <span className="flex w-6 shrink-0 items-center font-mono text-[11px] text-white/30 tabular-nums">
+                {String(i + 1).padStart(2, "0")}
+              </span>
+              <span className="min-w-0 flex-1 text-sm font-medium text-white/85">
                 {label}
                 {row.retryCount > 0 && (
-                  <span className="ml-2 rounded bg-yellow-50 px-1.5 py-0.5 text-xs text-yellow-700">
+                  <span className="ml-2 rounded-full border border-amber-500/[0.2] bg-amber-500/[0.08] px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-amber-300">
                     retry × {row.retryCount}
                   </span>
                 )}
               </span>
-              <span className="text-xs text-gray-500 tabular-nums">
-                {row.status === "pending" ? "—" : `${row.elapsed_ms} ms`}
+              <span className="shrink-0 font-mono text-[11px] text-white/40 tabular-nums">
+                {row.status === "pending" ? "—" : `${row.elapsed_ms}ms`}
               </span>
-              <span className="flex-1 truncate text-xs text-gray-500 sm:max-w-xs">
+              <span className="flex-1 truncate text-xs text-white/40 sm:max-w-xs">
                 {row.message}
               </span>
             </li>
           );
         })}
       </ul>
-    </section>
+    </motion.section>
   );
 }

@@ -6,11 +6,7 @@ const PUBLIC_PATHS = new Set(["/login", "/register"]);
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (pathname === "/") {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
-  }
-
-  if (PUBLIC_PATHS.has(pathname)) {
+  if (pathname === "/" || PUBLIC_PATHS.has(pathname)) {
     return NextResponse.next();
   }
 
