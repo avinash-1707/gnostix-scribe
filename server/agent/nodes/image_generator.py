@@ -2,7 +2,6 @@ import asyncio
 import logging
 
 from google import genai
-from google.genai import types
 
 from server.agent.cloudinary_uploader import upload_png_bytes
 from server.agent.slugify import slugify
@@ -10,6 +9,9 @@ from server.agent.state import AgentState
 from server.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+IMAGE_MODEL = "gemini-2.5-flash-image"
 
 
 _client: genai.Client | None = None
@@ -22,21 +24,28 @@ def _get_client() -> genai.Client:
     return _client
 
 
+def _extract_image_bytes(response) -> bytes | None:
+    candidates = getattr(response, "candidates", None) or []
+    for cand in candidates:
+        content = getattr(cand, "content", None)
+        parts = getattr(content, "parts", None) or []
+        for part in parts:
+            inline = getattr(part, "inline_data", None)
+            if inline and getattr(inline, "data", None):
+                mime = getattr(inline, "mime_type", "") or ""
+                if mime.startswith("image/"):
+                    return inline.data
+    return None
+
+
 def _generate_png(prompt: str) -> bytes | None:
     try:
         client = _get_client()
-        response = client.models.generate_images(
-            model="imagen-3.0-generate-002",
-            prompt=prompt,
-            config=types.GenerateImagesConfig(
-                number_of_images=1,
-                output_mime_type="image/png",
-            ),
+        response = client.models.generate_content(
+            model=IMAGE_MODEL,
+            contents=prompt,
         )
-        if not response.generated_images:
-            return None
-        image = response.generated_images[0].image
-        return getattr(image, "image_bytes", None)
+        return _extract_image_bytes(response)
     except Exception as exc:
         logger.warning("image generation failed: %s", exc)
         return None
