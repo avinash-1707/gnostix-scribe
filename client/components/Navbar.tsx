@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Feather, LogOut } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { motion } from "motion/react";
 import { getAccessToken, logout, subscribe } from "@/lib/auth";
+import { Logo } from "@/components/Logo";
 
 export default function Navbar() {
   const router = useRouter();
@@ -34,7 +35,7 @@ export default function Navbar() {
           className="group flex items-center gap-2"
         >
           <span className="grid place-items-center h-8 w-8 rounded-md bg-gradient-to-br from-indigo-400/30 to-rose-400/30 border border-white/[0.08] group-hover:border-white/[0.18] transition-colors">
-            <Feather className="h-4 w-4 text-white/80" />
+            <Logo className="h-5 w-5 text-white/90" />
           </span>
           <span className="text-sm font-medium tracking-wide text-white/90">
             Gnostix Scribe

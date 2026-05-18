@@ -10,6 +10,7 @@ import {
 } from "motion/react";
 
 import React, { useRef, useState } from "react";
+import { Logo } from "@/components/Logo";
 
 interface NavbarProps {
   children: React.ReactNode;
@@ -235,22 +236,7 @@ export const NavbarLogo = () => {
       className="relative z-20 mr-4 flex items-center space-x-2 px-2 py-1 text-sm font-normal text-black"
     >
       <span className="grid h-7 w-7 place-items-center rounded-md border border-white/[0.08] bg-gradient-to-br from-indigo-400/30 to-rose-400/30">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="text-white/80"
-        >
-          <path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z" />
-          <line x1="16" y1="8" x2="2" y2="22" />
-          <line x1="17.5" y1="15" x2="9" y2="15" />
-        </svg>
+        <Logo className="h-4 w-4 text-white/90" />
       </span>
       <span className="font-medium text-black dark:text-white">
         Gnostix Scribe
