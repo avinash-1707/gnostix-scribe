@@ -8,14 +8,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from server.auth.dependencies import CurrentUser
 from server.auth.service import decode_token
 from server.database import get_async_session
+from server.generation.quota import count_successful_topics
 from server.generation.service import (
     ConcurrentGenerationError,
     acquire_slot,
+    parse_topics,
     release_slot,
     run_generation,
 )
 from server.models import GenerationRecord, User
-from server.schemas import GenerationRecordOut
+from server.schemas import GenerationRecordOut, UsageResponse
 
 router = APIRouter(tags=["generation"])
 
@@ -43,6 +45,23 @@ async def generate(
 ) -> StreamingResponse:
     user = await _resolve_user_from_query_token(token, session)
 
+    parsed = parse_topics(topics)
+    if not parsed:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="no topics provided",
+        )
+    used = await count_successful_topics(session, user.id)
+    remaining = max(user.topics_limit - used, 0)
+    if len(parsed) > remaining:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                f"topic quota exceeded: {used}/{user.topics_limit} used, "
+                f"{remaining} remaining, {len(parsed)} requested"
+            ),
+        )
+
     try:
         await acquire_slot(user.id)
     except ConcurrentGenerationError as exc:
@@ -67,6 +86,16 @@ async def generate(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@router.get("/usage", response_model=UsageResponse)
+async def get_usage(
+    current_user: CurrentUser,
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> UsageResponse:
+    used = await count_successful_topics(session, current_user.id)
+    limit = current_user.topics_limit
+    return UsageResponse(used=used, limit=limit, remaining=max(limit - used, 0))
 
 
 @router.get("/history", response_model=list[GenerationRecordOut])

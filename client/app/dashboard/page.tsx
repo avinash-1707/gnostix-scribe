@@ -11,6 +11,7 @@ import GenerationHistory from "@/components/GenerationHistory";
 import { useSSE } from "@/hooks/useSSE";
 import { generateStreamUrl, type NodeEvent } from "@/lib/api";
 import { bootstrapAuth, getAccessToken } from "@/lib/auth";
+import { refreshUsage } from "@/lib/usage";
 
 interface TopicState {
   terminal: "DONE" | "ERROR" | null;
@@ -79,6 +80,7 @@ export default function DashboardPage() {
   useEffect(() => {
     if (streamUrl && (status === "closed" || status === "error")) {
       setHistoryKey((k) => k + 1);
+      void refreshUsage();
     }
   }, [status, streamUrl]);
 

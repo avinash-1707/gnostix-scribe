@@ -56,6 +56,12 @@ class GenerateRequest(BaseModel):
     topics_raw: str
 
 
+class UsageResponse(BaseModel):
+    used: int
+    limit: int
+    remaining: int
+
+
 class NodeEvent(BaseModel):
     node: str
     status: NodeStatus

@@ -57,6 +57,18 @@ async function detail(res: Response): Promise<string> {
   }
 }
 
+export interface Usage {
+  used: number;
+  limit: number;
+  remaining: number;
+}
+
+export async function fetchUsage(): Promise<Usage> {
+  const res = await authedFetch("/usage");
+  if (!res.ok) throw new ApiError(await detail(res), res.status);
+  return (await res.json()) as Usage;
+}
+
 export async function fetchHistory(): Promise<GenerationRecord[]> {
   const res = await authedFetch("/history");
   if (!res.ok) throw new ApiError(await detail(res), res.status);
