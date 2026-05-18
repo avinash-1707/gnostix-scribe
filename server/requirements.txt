@@ -16,3 +16,4 @@ google-genai==2.4.0
 trafilatura==1.12.2
 python-frontmatter==1.1.0
 cloudinary==1.41.0
+openai==1.59.6

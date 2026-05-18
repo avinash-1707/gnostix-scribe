@@ -8,24 +8,32 @@ from server.agent.state import AgentState
 logger = logging.getLogger(__name__)
 
 
-ANALYSE_PROMPT = """You are reviewing educational content about "{topic}" to decide where images would help.
+ANALYSE_PROMPT = """You are reviewing educational content about "{topic}" to decide where images would genuinely help.
 
 Content:
 {merged_content}
 
-Rules for deciding when an image is needed:
-- Data structures (trees, graphs, linked lists, stacks, queues) -> YES, always
-- Algorithm flows / step-by-step processes -> YES
-- System architecture or network diagrams -> YES
-- Abstract CS concepts with spatial structure (memory layout, recursion call stack) -> YES
-- Simple syntax or API usage (e.g. string methods, file I/O) -> NO
-- Pure text definitions -> NO
+Default to NO image. Only emit a request when a diagram is strictly necessary to understand the concept — text alone would leave the reader confused.
 
-For each concept that needs an image, output a JSON array:
+YES (image required):
+- Non-trivial data structures with spatial layout (trees, graphs, linked lists, heaps, tries)
+- Multi-step algorithm flows where step ordering or pointer movement matters
+- System/architecture diagrams with components and arrows
+- Memory layout, call stack, or other inherently spatial CS concepts
+
+NO (skip image):
+- Syntax, API usage, language features, string/file/IO operations
+- Pure text definitions, history, comparisons, lists of features
+- Topics already clear from the code blocks in the content
+- Anything a competent reader understands without a picture
+
+Hard cap: at most 2 images per topic. Pick only the highest-value ones. If unsure, output [].
+
+For each concept that truly needs an image, output a JSON array (max 2 items):
 [
   {{
     "concept": "short concept name",
-    "prompt": "detailed image generation prompt for Gemini — describe a clean, minimal technical diagram with white background, labelled clearly, educational illustration style",
+    "prompt": "detailed image generation prompt — clean, minimal technical diagram, white background, clear labels, educational illustration style",
     "placement_hint": "after section heading: <exact heading text>"
   }}
 ]
@@ -79,6 +87,8 @@ async def content_analyser(state: AgentState) -> dict:
     except Exception as exc:
         logger.warning("content_analyser failed: %s", exc)
         items = []
+
+    items = items[:2]
 
     return {
         "needs_images": bool(items),

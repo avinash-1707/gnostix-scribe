@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
 
     GOOGLE_API_KEY: str = ""
+    OPENAI_API_KEY: str = ""
     CLOUDINARY_URL: str = ""
 
     CLIENT_URL: str = "http://localhost:3000"
