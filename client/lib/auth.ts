@@ -65,18 +65,36 @@ export async function login(email: string, password: string): Promise<string> {
   return data.access_token;
 }
 
+let refreshInFlight: Promise<string | null> | null = null;
+
 export async function refresh(): Promise<string | null> {
-  const res = await fetch(`${API_URL}/auth/refresh`, {
-    method: "POST",
-    credentials: "include",
-  });
-  if (!res.ok) {
-    setAccessToken(null);
-    return null;
-  }
-  const data = (await res.json()) as { access_token: string };
-  setAccessToken(data.access_token);
-  return data.access_token;
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = (async () => {
+    try {
+      const res = await fetch(`${API_URL}/auth/refresh`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) {
+        setAccessToken(null);
+        return null;
+      }
+      const data = (await res.json()) as { access_token: string };
+      setAccessToken(data.access_token);
+      return data.access_token;
+    } catch {
+      setAccessToken(null);
+      return null;
+    } finally {
+      refreshInFlight = null;
+    }
+  })();
+  return refreshInFlight;
+}
+
+export async function bootstrapAuth(): Promise<string | null> {
+  if (accessToken) return accessToken;
+  return refresh();
 }
 
 export async function logout(): Promise<void> {

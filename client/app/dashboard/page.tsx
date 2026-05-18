@@ -10,7 +10,7 @@ import MdxOutputBox from "@/components/MdxOutputBox";
 import GenerationHistory from "@/components/GenerationHistory";
 import { useSSE } from "@/hooks/useSSE";
 import { generateStreamUrl, type NodeEvent } from "@/lib/api";
-import { getAccessToken, refresh } from "@/lib/auth";
+import { bootstrapAuth, getAccessToken } from "@/lib/auth";
 
 interface TopicState {
   terminal: "DONE" | "ERROR" | null;
@@ -40,11 +40,7 @@ export default function DashboardPage() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      if (getAccessToken()) {
-        if (!cancelled) setBootstrapping(false);
-        return;
-      }
-      const token = await refresh();
+      const token = await bootstrapAuth();
       if (cancelled) return;
       if (!token) router.replace("/login");
       else setBootstrapping(false);
