@@ -1,5 +1,10 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
+import {
+  Geist,
+  Geist_Mono,
+  Instrument_Serif,
+  Dancing_Script,
+} from "next/font/google";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -19,6 +24,12 @@ const instrumentSerif = Instrument_Serif({
   subsets: ["latin"],
 });
 
+const dancingScript = Dancing_Script({
+  variable: "--font-dancing-script",
+  weight: ["400", "600", "700"],
+  subsets: ["latin"],
+});
+
 export const metadata: Metadata = {
   title: "Gnostix Scribe — MDX tutorials, agent-authored",
   description:
@@ -33,7 +44,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${instrumentSerif.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${instrumentSerif.variable} ${dancingScript.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-[#030303] text-white">
         {children}

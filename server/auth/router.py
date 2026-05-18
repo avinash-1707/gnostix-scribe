@@ -104,6 +104,7 @@ async def refresh(
     try:
         payload = decode_token(refresh_token, expected_type="refresh")
     except ValueError as exc:
+        _clear_refresh_cookie(response)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)
         ) from exc

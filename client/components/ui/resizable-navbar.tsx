@@ -10,6 +10,7 @@ import {
 } from "motion/react";
 
 import React, { useRef, useState } from "react";
+import Link from "next/link";
 import { Logo } from "@/components/Logo";
 
 interface NavbarProps {
@@ -231,23 +232,24 @@ export const MobileNavToggle = ({
 
 export const NavbarLogo = () => {
   return (
-    <a
+    <Link
       href="/"
-      className="relative z-20 mr-4 flex items-center space-x-2 px-2 py-1 text-sm font-normal text-black"
+      className="group relative z-20 mr-4 flex items-center gap-1 px-2 py-1 text-sm font-normal text-black"
     >
-      <span className="grid h-7 w-7 place-items-center rounded-md border border-white/[0.08] bg-gradient-to-br from-indigo-400/30 to-rose-400/30">
-        <Logo className="h-4 w-4 text-white/90" />
+      <Logo className="h-7 w-7" />
+      <span
+        style={{ fontFamily: "var(--font-dancing-script)" }}
+        className="text-2xl font-semibold leading-none text-black dark:text-white/90 group-hover:dark:text-white transition-colors"
+      >
+        Scribe
       </span>
-      <span className="font-medium text-black dark:text-white">
-        Gnostix Scribe
-      </span>
-    </a>
+    </Link>
   );
 };
 
 export const NavbarButton = ({
   href,
-  as: Tag = "a",
+  as: Tag = Link,
   children,
   className,
   variant = "primary",
