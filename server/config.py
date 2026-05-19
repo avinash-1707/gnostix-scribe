@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     CLOUDINARY_URL: str = ""
 
-    CLIENT_URL: str = "http://localhost:3000"
+    CLIENT_URL: str = "http://localhost:3001"
 
     OUTPUT_DIR: Path = Field(
         default_factory=lambda: Path(__file__).resolve().parent.parent / "output" / "content"

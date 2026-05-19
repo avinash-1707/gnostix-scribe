@@ -13,21 +13,22 @@ ANALYSE_PROMPT = """You are reviewing educational content about "{topic}" to dec
 Content:
 {merged_content}
 
-Default to NO image. Only emit a request when a diagram is strictly necessary to understand the concept — text alone would leave the reader confused.
+Image generation is ALLOWED and encouraged when it adds real value. Only skip when the content + any mermaid diagrams already convey the concept fully — i.e. an extra image would be redundant.
 
-YES (image required):
+YES (request image) — strong candidates:
 - Non-trivial data structures with spatial layout (trees, graphs, linked lists, heaps, tries)
 - Multi-step algorithm flows where step ordering or pointer movement matters
 - System/architecture diagrams with components and arrows
 - Memory layout, call stack, or other inherently spatial CS concepts
+- Visual analogies or real-world illustrations that aid intuition
+- Comparison/before-after visuals where a picture beats prose
 
-NO (skip image):
-- Syntax, API usage, language features, string/file/IO operations
-- Pure text definitions, history, comparisons, lists of features
-- Topics already clear from the code blocks in the content
-- Anything a competent reader understands without a picture
+SKIP only when:
+- Mermaid code blocks in the content already diagram the concept clearly
+- Topic is fully expressible in text/code (pure syntax notes, short definitions, trivial lists) AND no spatial/visual aspect would help
+- Adding an image would just duplicate what existing diagrams or code blocks already show
 
-Hard cap: at most 2 images per topic. Pick only the highest-value ones. If unsure, output [].
+Hard cap: at most 2 images per topic. Pick the highest-value ones.
 
 For each concept that truly needs an image, output a JSON array (max 2 items):
 [

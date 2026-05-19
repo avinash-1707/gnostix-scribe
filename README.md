@@ -67,17 +67,17 @@ make migrate
 | `GOOGLE_API_KEY` | Gemini LLM + image |
 | `OPENAI_API_KEY` | Image fallback |
 | `CLOUDINARY_URL` | `cloudinary://<key>:<secret>@<cloud_name>` |
-| `CLIENT_URL` | CORS origin, e.g. `http://localhost:3000` |
+| `CLIENT_URL` | CORS origin, e.g. `http://localhost:3001` |
 
 ## Run
 
 ```bash
-make dev      # server (:8000) + client (:3000) together
+make dev      # server (:8000) + client (:3001) together
 make server   # FastAPI only
 make client   # Next.js only
 ```
 
-Open `http://localhost:3000` → register → submit a topic.
+Open `http://localhost:3001` → register → submit a topic.
 
 ## Layout
 

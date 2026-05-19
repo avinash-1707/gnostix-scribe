@@ -5,7 +5,7 @@ UVICORN := server/.venv/bin/uvicorn
 ALEMBIC := server/.venv/bin/alembic
 
 dev:
-	@echo "Starting server (8000) + client (3000). Ctrl-C to stop both."
+	@echo "Starting server (8000) + client (3001). Ctrl-C to stop both."
 	@trap 'kill 0' INT TERM EXIT; \
 		$(UVICORN) server.main:app --reload --host 127.0.0.1 --port 8000 & \
 		(cd client && pnpm dev) & \

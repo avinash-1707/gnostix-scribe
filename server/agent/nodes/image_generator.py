@@ -63,7 +63,12 @@ def _generate_png_gemini(prompt: str) -> bytes | None:
             model=GEMINI_IMAGE_MODEL,
             contents=prompt,
         )
-        return _extract_gemini_image_bytes(response)
+        data = _extract_gemini_image_bytes(response)
+        if data:
+            logger.info("gemini image generation succeeded (%d bytes)", len(data))
+        else:
+            logger.warning("gemini image generation returned no image bytes")
+        return data
     except Exception as exc:
         logger.warning("gemini image generation failed: %s", exc)
         return None
@@ -83,8 +88,11 @@ def _generate_png_openai(prompt: str) -> bytes | None:
         data = response.data[0] if response.data else None
         b64 = getattr(data, "b64_json", None) if data else None
         if not b64:
+            logger.warning("openai image generation returned no image bytes")
             return None
-        return base64.b64decode(b64)
+        png = base64.b64decode(b64)
+        logger.info("openai image generation succeeded (%d bytes)", len(png))
+        return png
     except Exception as exc:
         logger.warning("openai image generation failed: %s", exc)
         return None

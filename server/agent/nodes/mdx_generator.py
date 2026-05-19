@@ -12,16 +12,6 @@ You will be given merged tutorial content and a list of available images.
 Your output must be a single complete MDX file — nothing else. No explanation, no preamble.
 
 ============================================================
-FRONTMATTER (required, YAML between --- delimiters)
-============================================================
-
----
-title: "<topic name, title case>"
-description: "<one sentence summary of what this article teaches>"
-tags: ["<tag1>", "<tag2>", ...]
----
-
-============================================================
 DOCUMENT STRUCTURE (required sections in this order)
 ============================================================
 
