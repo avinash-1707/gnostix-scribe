@@ -18,10 +18,15 @@ SOURCE 2 — TpointTech (secondary, supplementary):
 SOURCE 3 — Internal knowledge (gaps + analogies only):
 {llm_knowledge_raw}
 
+SOURCE 4 — Gap-fill content written after a failed coverage check (use to fill whatever
+the other sources miss; may be empty on the first pass):
+{gap_content}
+
 Your task:
 1. Identify the major sections/concepts this topic requires for a complete tutorial.
 2. For each section, select the best content from the available sources (prioritise Source 1).
-3. If Source 1 has a gap for a section, use Source 2. If both are missing it, use Source 3.
+3. If Source 1 has a gap for a section, use Source 2. If both are missing it, use Source 3
+   and Source 4.
 4. Remove duplicate explanations — keep only the clearest version.
 5. Preserve all code examples exactly as scraped (do not paraphrase code).
 6. Output a single structured document with clear section headings.
@@ -56,6 +61,7 @@ async def content_merger(state: AgentState) -> dict:
         gfg_raw=state.get("gfg_raw") or "(empty)",
         tpointtech_raw=state.get("tpointtech_raw") or "(empty)",
         llm_knowledge_raw=state.get("llm_knowledge_raw") or "(empty)",
+        gap_content=state.get("gap_content") or "(empty)",
     )
 
     try:
