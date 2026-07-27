@@ -76,8 +76,17 @@ def _build_output_entry(
     }
 
 
+MAX_PARALLEL_TOPICS = 2
+
+
 async def run_generation(user_id: int, topics_raw: str) -> AsyncIterator[str]:
-    """Async generator of SSE-formatted chunks for the given user + topics."""
+    """Async generator of SSE-formatted chunks for the given user + topics.
+
+    Topics run concurrently (bounded by MAX_PARALLEL_TOPICS); their events are
+    merged into one stream via a queue. The client demultiplexes by the
+    ``topic`` field. DB commits are serialised — collected_outputs is reassigned
+    wholesale on each commit, so concurrent commits would lose updates.
+    """
     topics = parse_topics(topics_raw)
     if not topics:
         yield format_event(
@@ -89,65 +98,92 @@ async def run_generation(user_id: int, topics_raw: str) -> AsyncIterator[str]:
     record_id = await create_record(AsyncSessionLocal, user_id, topics)
     collected_outputs: list[dict] = []
     saw_failure = False
+    queue: asyncio.Queue[str | None] = asyncio.Queue()
+    commit_lock = asyncio.Lock()
+    sem = asyncio.Semaphore(MAX_PARALLEL_TOPICS)
 
-    for topic in topics:
-        final_state: dict | None = None
-
-        async for event, state in stream_topic(topic):
-            if event is not None:
-                yield format_event(event)
-                if event.status == "error":
-                    saw_failure = True
-            if state is not None:
-                final_state = state
-
-        if not final_state or not final_state.get("output_path"):
-            saw_failure = True
-            collected_outputs.append(
-                {"topic": topic, "mdx": "", "status": "failed",
-                 "cloudinary_image_urls": []}
-            )
+    async def run_topic(topic: str) -> None:
+        nonlocal saw_failure
+        async with sem:
+            final_state: dict | None = None
             try:
-                await commit_topic_output_then_delete(
-                    AsyncSessionLocal, record_id, collected_outputs, "",
-                )
+                async for event, state in stream_topic(topic):
+                    if event is not None:
+                        await queue.put(format_event(event))
+                        if event.status == "error":
+                            saw_failure = True
+                    if state is not None:
+                        final_state = state
             except Exception as exc:
-                logger.error("commit failed topic record after agent failure: %s", exc)
-            yield format_event(
-                NodeEvent(node="ERROR", status="error",
-                          message="agent did not produce output",
-                          elapsed_ms=0, topic=topic)
-            )
-            continue
+                logger.exception("stream_topic crashed for %r", topic)
+                saw_failure = True
+                final_state = None
 
-        output_path = final_state["output_path"]
+            if not final_state or not final_state.get("output_path"):
+                saw_failure = True
+                async with commit_lock:
+                    collected_outputs.append(
+                        {"topic": topic, "mdx": "", "status": "failed",
+                         "cloudinary_image_urls": []}
+                    )
+                    try:
+                        await commit_topic_output_then_delete(
+                            AsyncSessionLocal, record_id, collected_outputs, "",
+                        )
+                    except Exception as exc:
+                        logger.error("commit failed topic record after agent failure: %s", exc)
+                await queue.put(format_event(
+                    NodeEvent(node="ERROR", status="error",
+                              message="agent did not produce output",
+                              elapsed_ms=0, topic=topic)
+                ))
+                return
+
+            output_path = final_state["output_path"]
+            try:
+                mdx_text = await _read_mdx(output_path)
+            except Exception as exc:
+                logger.error("read mdx failed for %s: %s", output_path, exc)
+                mdx_text = ""
+
+            entry = _build_output_entry(topic, mdx_text, final_state)
+            async with commit_lock:
+                collected_outputs.append(entry)
+                ok = await commit_topic_output_then_delete(
+                    AsyncSessionLocal, record_id, collected_outputs, output_path,
+                )
+            if not ok:
+                saw_failure = True
+                await queue.put(format_event(
+                    NodeEvent(node="ERROR", status="error",
+                              message="DB commit failed; file retained for retry",
+                              elapsed_ms=0, topic=topic)
+                ))
+                return
+
+            if entry["status"] != "completed":
+                saw_failure = True
+            await queue.put(format_event(
+                NodeEvent(node="DONE", status="done",
+                          message=mdx_text, elapsed_ms=0, topic=topic)
+            ))
+
+    async def drive() -> None:
         try:
-            mdx_text = await _read_mdx(output_path)
-        except Exception as exc:
-            logger.error("read mdx failed for %s: %s", output_path, exc)
-            mdx_text = ""
+            await asyncio.gather(*(run_topic(t) for t in topics))
+        finally:
+            await queue.put(None)
 
-        entry = _build_output_entry(topic, mdx_text, final_state)
-        collected_outputs.append(entry)
-
-        ok = await commit_topic_output_then_delete(
-            AsyncSessionLocal, record_id, collected_outputs, output_path,
-        )
-        if not ok:
-            saw_failure = True
-            yield format_event(
-                NodeEvent(node="ERROR", status="error",
-                          message="DB commit failed; file retained for retry",
-                          elapsed_ms=0, topic=topic)
-            )
-            continue
-
-        if entry["status"] != "completed":
-            saw_failure = True
-        yield format_event(
-            NodeEvent(node="DONE", status="done",
-                      message=mdx_text, elapsed_ms=0, topic=topic)
-        )
+    driver = asyncio.create_task(drive())
+    try:
+        while True:
+            chunk = await queue.get()
+            if chunk is None:
+                break
+            yield chunk
+        await driver
+    finally:
+        driver.cancel()
 
     final_status = "partial" if saw_failure else "completed"
     try:

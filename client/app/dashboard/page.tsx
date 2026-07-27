@@ -51,7 +51,7 @@ export default function DashboardPage() {
     };
   }, [router]);
 
-  const { events, status } = useSSE(streamUrl);
+  const { events, status } = useSSE(streamUrl, topics.length || 1);
 
   const perTopic = useMemo(() => {
     const map = new Map<string, { events: NodeEvent[]; state: TopicState }>();

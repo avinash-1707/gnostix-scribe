@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     OPENROUTER_MODEL_BUDGET: str = ""  # defaults set in agent/llm.py
     OPENROUTER_MODEL_WRITER: str = ""
     OPENROUTER_MODEL_JUDGE: str = ""
+    OPENROUTER_MODEL_IMAGE: str = ""  # default set in agent/nodes/image_generator.py
 
     CLIENT_URL: str = "http://localhost:3001"
 
