@@ -142,6 +142,27 @@ def _check_raw_html(body: str) -> list[str]:
     return errors
 
 
+_FENCE_LINE_RE = re.compile(r"^([ \t]*)```([A-Za-z0-9_+\-]*)\s*$")
+
+
+def _auto_fix(mdx: str) -> str:
+    """Deterministically repair mechanical issues before burning an LLM retry:
+    opening fences without a language tag get ``text``; an unclosed final fence
+    gets closed."""
+    lines = mdx.split("\n")
+    in_fence = False
+    for i, line in enumerate(lines):
+        m = _FENCE_LINE_RE.match(line)
+        if not m:
+            continue
+        if not in_fence and not m.group(2).strip():
+            lines[i] = f"{m.group(1)}```text"
+        in_fence = not in_fence
+    if in_fence:
+        lines.append("```")
+    return "\n".join(lines)
+
+
 def _validate(mdx: str, image_srcs: set[str]) -> list[str]:
     if not mdx or not mdx.strip():
         return ["MDX draft is empty"]
@@ -162,8 +183,16 @@ async def mdx_validator(state: AgentState) -> dict:
     mdx = state.get("mdx_draft", "")
     images = state.get("generated_images", [])
     image_srcs = {img["src"] for img in images if img.get("src")}
-    errors = _validate(mdx, image_srcs)
-    return {
+
+    fixed = _auto_fix(mdx) if mdx.strip() else mdx
+    if fixed != mdx:
+        logger.info("mdx_validator auto-fixed mechanical issues")
+
+    errors = _validate(fixed, image_srcs)
+    result = {
         "validation_ok": len(errors) == 0,
         "validation_errors": errors,
     }
+    if fixed != mdx:
+        result["mdx_draft"] = fixed
+    return result
