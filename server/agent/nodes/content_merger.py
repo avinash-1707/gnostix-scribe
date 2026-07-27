@@ -1,7 +1,7 @@
 import logging
 import re
 
-from server.agent.llm import get_llm
+from server.agent.llm import LLMUnavailableError, invoke_text
 from server.agent.state import AgentState
 
 logger = logging.getLogger(__name__)
@@ -64,16 +64,34 @@ async def content_merger(state: AgentState) -> dict:
         gap_content=state.get("gap_content") or "(empty)",
     )
 
+    usage: dict = {}
+    warnings: list[str] = []
     try:
-        llm = get_llm("writer", temperature=0.2)
-        response = await llm.ainvoke(prompt)
-        merged = response.content or ""
-    except Exception as exc:
-        logger.warning("content_merger LLM call failed: %s", exc)
-        merged = state.get("merged_content", "")
+        merged, usage = await invoke_text("writer", prompt, temperature=0.2)
+    except LLMUnavailableError as exc:
+        # Degrade to a raw concatenation of sources rather than shipping an
+        # empty merge — downstream nodes still have real material to work with.
+        logger.warning("content_merger LLM call failed, falling back to concat: %s", exc)
+        merged = "\n\n---\n\n".join(
+            part
+            for part in (
+                state.get("merged_content", ""),
+                state.get("gfg_raw", ""),
+                state.get("tpointtech_raw", ""),
+                state.get("llm_knowledge_raw", ""),
+                state.get("gap_content", ""),
+            )
+            if part
+        )
+        warnings.append(f"content_merger degraded to source concat: {exc}")
 
-    return {
+    result = {
         "merged_content": merged,
         "coverage_ok": _meets_coverage(merged),
         "scrape_attempts": attempts + 1,
     }
+    if usage:
+        result["token_usage"] = {"content_merger": usage}
+    if warnings:
+        result["warnings"] = warnings
+    return result

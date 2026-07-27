@@ -11,6 +11,7 @@ import time
 from collections.abc import AsyncIterator
 
 from server.agent.graph import compiled_graph
+from server.agent.llm import merge_usage
 from server.schemas import NodeEvent
 
 logger = logging.getLogger(__name__)
@@ -123,7 +124,16 @@ async def stream_topic(
             elif kind == "on_chain_end":
                 output = ev.get("data", {}).get("output") or {}
                 if isinstance(output, dict):
-                    collected.update(output)
+                    # Reducer-backed keys accumulate; plain keys overwrite.
+                    for key, value in output.items():
+                        if key == "token_usage":
+                            collected["token_usage"] = merge_usage(
+                                collected.get("token_usage", {}), value
+                            )
+                        elif key == "warnings":
+                            collected.setdefault("warnings", []).extend(value)
+                        else:
+                            collected[key] = value
                 node_elapsed = int(
                     (time.perf_counter() - node_starts.get(name, start)) * 1000
                 )

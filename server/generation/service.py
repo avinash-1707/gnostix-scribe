@@ -70,6 +70,9 @@ def _build_output_entry(
         "mdx": mdx_text,
         "status": status,
         "cloudinary_image_urls": [img["src"] for img in images if img.get("src")],
+        "token_usage": final_state.get("token_usage") or {},
+        "judge_scores": final_state.get("judge_scores") or {},
+        "warnings": final_state.get("warnings") or [],
     }
 
 

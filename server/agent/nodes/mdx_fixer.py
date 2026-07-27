@@ -8,7 +8,7 @@ converges faster and preserves the good parts.
 import json
 import logging
 
-from server.agent.llm import get_llm
+from server.agent.llm import LLMUnavailableError, invoke_text
 from server.agent.state import AgentState
 
 logger = logging.getLogger(__name__)
@@ -74,15 +74,20 @@ async def mdx_fixer(state: AgentState) -> dict:
     )
 
     try:
-        llm = get_llm("writer", temperature=0.1)
-        response = await llm.ainvoke(prompt)
-        fixed = _strip_code_fence_wrapper(response.content or "").strip()
-    except Exception as exc:
-        logger.warning("mdx_fixer failed: %s", exc)
-        fixed = ""
+        raw, usage = await invoke_text("writer", prompt, temperature=0.1)
+        fixed = _strip_code_fence_wrapper(raw).strip()
+    except LLMUnavailableError as exc:
+        logger.warning("mdx_fixer failed, keeping previous draft: %s", exc)
+        return {
+            "mdx_draft": draft,
+            "revision_notes": [],
+            "generation_attempts": attempts + 1,
+            "warnings": [f"mdx_fixer unavailable, draft unchanged: {exc}"],
+        }
 
     return {
         "mdx_draft": fixed or draft,
         "revision_notes": [],
         "generation_attempts": attempts + 1,
+        "token_usage": {"mdx_fixer": usage},
     }

@@ -1,4 +1,7 @@
-from typing import TypedDict
+import operator
+from typing import Annotated, TypedDict
+
+from server.agent.llm import merge_usage
 
 
 class AgentState(TypedDict, total=False):
@@ -35,5 +38,9 @@ class AgentState(TypedDict, total=False):
 
     scrape_attempts: int
     generation_attempts: int
+
+    # Reducer-backed accumulators: parallel nodes may write these concurrently.
+    warnings: Annotated[list[str], operator.add]
+    token_usage: Annotated[dict, merge_usage]
 
     output_path: str

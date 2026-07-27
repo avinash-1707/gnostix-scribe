@@ -1,7 +1,7 @@
 import logging
 import re
 
-from server.agent.llm import get_llm
+from server.agent.llm import LLMUnavailableError, invoke_text
 from server.agent.state import AgentState
 
 logger = logging.getLogger(__name__)
@@ -34,14 +34,14 @@ async def gap_filler(state: AgentState) -> dict:
     merged = state.get("merged_content", "")
 
     try:
-        llm = get_llm("budget", temperature=0.4)
-        response = await llm.ainvoke(
-            GAP_PROMPT.format(topic=topic, merged_content=merged or "(empty)")
+        gap, usage = await invoke_text(
+            "budget",
+            GAP_PROMPT.format(topic=topic, merged_content=merged or "(empty)"),
+            temperature=0.4,
         )
-        gap = response.content or ""
-    except Exception as exc:
+    except LLMUnavailableError as exc:
         logger.warning("gap_filler failed: %s", exc)
-        gap = ""
+        return {"gap_content": "", "warnings": [f"gap_filler unavailable: {exc}"]}
 
     logger.info("gap_filler produced %d words for %r", _word_count(gap), topic)
-    return {"gap_content": gap}
+    return {"gap_content": gap, "token_usage": {"gap_filler": usage}}

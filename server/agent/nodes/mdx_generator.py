@@ -9,7 +9,7 @@ import asyncio
 import json
 import logging
 
-from server.agent.llm import get_llm
+from server.agent.llm import LLMUnavailableError, add_usage, invoke_text
 from server.agent.state import AgentState
 
 logger = logging.getLogger(__name__)
@@ -163,7 +163,7 @@ async def _generate_section(
     sections: list[dict],
     idx: int,
     images: list[dict],
-) -> str:
+) -> tuple[str, dict]:
     section = sections[idx]
     heading_line = _heading_line(section)
     prompt = SECTION_PROMPT.format(
@@ -179,16 +179,15 @@ async def _generate_section(
         heading_line=heading_line,
     )
     try:
-        llm = get_llm("writer", temperature=0.3)
-        response = await llm.ainvoke(prompt)
-        text = _strip_code_fence_wrapper(response.content or "").strip()
-    except Exception as exc:
+        raw, usage = await invoke_text("writer", prompt, temperature=0.3)
+        text = _strip_code_fence_wrapper(raw).strip()
+    except LLMUnavailableError as exc:
         logger.warning("mdx_generator section %r failed: %s", section.get("heading"), exc)
-        text = ""
+        return "", {}
 
     if text and not text.startswith(("#", heading_line)):
         text = f"{heading_line}\n\n{text}"
-    return text
+    return text, usage
 
 
 async def mdx_generator(state: AgentState) -> dict:
@@ -204,17 +203,30 @@ async def mdx_generator(state: AgentState) -> dict:
         return {"mdx_draft": "", "generation_attempts": attempts + 1}
 
     image_map = _assign_images(sections, images)
-    section_texts = await asyncio.gather(
+    results = await asyncio.gather(
         *(
             _generate_section(topic, merged, sections, i, image_map.get(i, []))
             for i in range(len(sections))
         )
     )
 
-    body = "\n\n".join(t for t in section_texts if t)
-    draft = f"{_build_frontmatter(outline, topic)}\n{body}\n" if body else ""
+    texts = [text for text, _ in results]
+    usage: dict = {}
+    for _, section_usage in results:
+        usage = add_usage(usage, section_usage)
 
-    return {
-        "mdx_draft": draft,
+    failed = sum(1 for t in texts if not t)
+    body = "\n\n".join(t for t in texts if t)
+    if not body:
+        # Nothing generated at all — fail loudly so the SSE stream reports an
+        # error instead of shipping an empty NEEDS_REVIEW file.
+        raise RuntimeError(f"mdx_generator: all {len(sections)} sections failed")
+
+    result = {
+        "mdx_draft": f"{_build_frontmatter(outline, topic)}\n{body}\n",
         "generation_attempts": attempts + 1,
+        "token_usage": {"mdx_generator": usage},
     }
+    if failed:
+        result["warnings"] = [f"mdx_generator: {failed}/{len(sections)} sections failed"]
+    return result

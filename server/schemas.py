@@ -39,6 +39,9 @@ class MdxOutput(BaseModel):
     mdx: str
     status: str
     cloudinary_image_urls: list[str] = Field(default_factory=list)
+    token_usage: dict = Field(default_factory=dict)
+    judge_scores: dict = Field(default_factory=dict)
+    warnings: list[str] = Field(default_factory=list)
 
 
 class GenerationRecordOut(BaseModel):

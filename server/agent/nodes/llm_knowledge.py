@@ -1,6 +1,6 @@
 import logging
 
-from server.agent.llm import get_llm
+from server.agent.llm import LLMUnavailableError, invoke_text
 from server.agent.state import AgentState
 
 logger = logging.getLogger(__name__)
@@ -28,9 +28,11 @@ async def llm_knowledge(state: AgentState) -> dict:
     if not topic:
         return {"llm_knowledge_raw": ""}
     try:
-        llm = get_llm("budget", temperature=0.4)
-        response = await llm.ainvoke(PROMPT.format(topic=topic))
-        return {"llm_knowledge_raw": response.content or ""}
-    except Exception as exc:
+        text, usage = await invoke_text("budget", PROMPT.format(topic=topic), temperature=0.4)
+        return {"llm_knowledge_raw": text, "token_usage": {"llm_knowledge": usage}}
+    except LLMUnavailableError as exc:
         logger.warning("llm_knowledge failed: %s", exc)
-        return {"llm_knowledge_raw": ""}
+        return {
+            "llm_knowledge_raw": "",
+            "warnings": [f"llm_knowledge unavailable: {exc}"],
+        }
