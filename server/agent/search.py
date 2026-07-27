@@ -16,6 +16,8 @@ from urllib.parse import quote_plus, unquote, urlparse
 
 import httpx
 
+from server.agent.cache import cache_get, cache_put
+
 logger = logging.getLogger(__name__)
 
 _DDG_URL = "https://html.duckduckgo.com/html/?q={query}"
@@ -71,6 +73,11 @@ async def resolve_urls(site: str, topic: str, limit: int = 2) -> list[str]:
     ``site`` is a bare domain like ``www.geeksforgeeks.org``. Returns an empty
     list on total failure — the caller decides the fallback.
     """
+    cache_key = f"{site}|{topic}|{limit}"
+    cached = await cache_get("search", cache_key)
+    if cached:
+        return cached
+
     query = quote_plus(f"site:{site} {topic}")
     url = _DDG_URL.format(query=query)
 
@@ -84,7 +91,9 @@ async def resolve_urls(site: str, topic: str, limit: int = 2) -> list[str]:
             return []
         if status == 200:
             candidates = [unquote(m.group(1)) for m in _UDDG_RE.finditer(html)]
-            return _filter_urls(candidates, site, limit)
+            urls = _filter_urls(candidates, site, limit)
+            await cache_put("search", cache_key, urls)
+            return urls
         logger.info(
             "resolve_urls(%s): ddg throttled (%d), attempt %d/3",
             site, status, attempt + 1,

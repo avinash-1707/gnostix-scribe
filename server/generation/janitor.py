@@ -9,6 +9,7 @@ import asyncio
 import logging
 import time
 
+from server.agent.cache import sweep_cache
 from server.config import settings
 
 logger = logging.getLogger(__name__)
@@ -34,6 +35,9 @@ def sweep_once() -> int:
             logger.warning("janitor: failed to inspect %s: %s", path, exc)
     if deleted:
         logger.info("janitor: deleted %d stale .mdx file(s)", deleted)
+    expired = sweep_cache()
+    if expired:
+        logger.info("janitor: deleted %d expired cache entrie(s)", expired)
     return deleted
 
 

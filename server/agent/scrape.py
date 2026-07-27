@@ -5,6 +5,7 @@ import logging
 
 import trafilatura
 
+from server.agent.cache import cache_get, cache_put
 from server.agent.search import resolve_urls
 
 logger = logging.getLogger(__name__)
@@ -31,6 +32,15 @@ def _extract(url: str) -> str:
         return ""
 
 
+async def _extract_cached(url: str) -> str:
+    cached = await cache_get("page", url)
+    if cached:
+        return cached
+    text = await asyncio.to_thread(_extract, url)
+    await cache_put("page", url, text)
+    return text
+
+
 async def scrape_source(site: str, topic: str, fallback_url: str) -> tuple[str, list[str]]:
     """Resolve real article URLs via search, scrape them, concatenate.
 
@@ -41,7 +51,7 @@ async def scrape_source(site: str, topic: str, fallback_url: str) -> tuple[str, 
     if not urls and fallback_url:
         urls = [fallback_url]
 
-    texts = await asyncio.gather(*(asyncio.to_thread(_extract, u) for u in urls))
+    texts = await asyncio.gather(*(_extract_cached(u) for u in urls))
     parts = []
     used: list[str] = []
     for url, text in zip(urls, texts):
