@@ -5,11 +5,11 @@ one revision round through mdx_fixer if it falls below threshold. Structure can
 be regex-checked — accuracy, depth, and grounding cannot.
 """
 
-import json
 import logging
-import re
 
-from server.agent.llm import get_llm
+from pydantic import BaseModel, Field
+
+from server.agent.llm import LLMOutputError, LLMUnavailableError, invoke_json
 from server.agent.state import AgentState
 
 logger = logging.getLogger(__name__)
@@ -50,29 +50,19 @@ Output JSON only, matching exactly:
 """
 
 
-_JSON_OBJECT_RE = re.compile(r"\{.*\}", re.DOTALL)
+class JudgeVerdict(BaseModel):
+    accuracy: float
+    depth: float
+    clarity: float
+    grounding: float
+    revision_notes: list[str] = Field(default_factory=list)
+
+
 _DIMENSIONS = ("accuracy", "depth", "clarity", "grounding")
 
 
-def _parse_verdict(text: str) -> tuple[dict, list[str]] | None:
-    match = _JSON_OBJECT_RE.search(text or "")
-    if not match:
-        return None
-    try:
-        data = json.loads(match.group(0))
-    except json.JSONDecodeError:
-        return None
-    if not isinstance(data, dict):
-        return None
-    scores: dict = {}
-    for dim in _DIMENSIONS:
-        try:
-            scores[dim] = max(1.0, min(10.0, float(data.get(dim, 0))))
-        except (TypeError, ValueError):
-            return None
-    notes_raw = data.get("revision_notes")
-    notes = [str(n) for n in notes_raw if str(n).strip()] if isinstance(notes_raw, list) else []
-    return scores, notes
+def _clamp(value: float) -> float:
+    return max(1.0, min(10.0, float(value)))
 
 
 async def quality_judge(state: AgentState) -> dict:
@@ -88,25 +78,21 @@ async def quality_judge(state: AgentState) -> dict:
     )
 
     try:
-        llm = get_llm("judge", temperature=0.0)
-        response = await llm.ainvoke(prompt)
-        parsed = _parse_verdict(response.content or "")
-    except Exception as exc:
-        logger.warning("quality_judge failed: %s", exc)
-        parsed = None
-
-    if parsed is None:
+        verdict, usage = await invoke_json("judge", prompt, JudgeVerdict, temperature=0.0)
+    except (LLMUnavailableError, LLMOutputError) as exc:
         # Judge unavailable — don't block the pipeline, pass the draft through.
-        logger.warning("quality_judge verdict unparseable; passing draft through")
+        logger.warning("quality_judge unavailable; passing draft through: %s", exc)
         return {
             "judge_scores": {},
             "judge_overall": 0.0,
             "judge_attempts": rounds + 1,
             "revision_notes": [],
+            "warnings": [f"quality_judge skipped: {exc}"],
         }
 
-    scores, notes = parsed
+    scores = {dim: _clamp(getattr(verdict, dim)) for dim in _DIMENSIONS}
     overall = round(sum(scores.values()) / len(scores), 2)
+    notes = [n for n in verdict.revision_notes if n.strip()]
     logger.info("quality_judge %r: overall=%.2f scores=%s", topic, overall, scores)
 
     needs_revision = overall < PASS_THRESHOLD and rounds < MAX_JUDGE_ROUNDS
@@ -115,4 +101,5 @@ async def quality_judge(state: AgentState) -> dict:
         "judge_overall": overall,
         "judge_attempts": rounds + 1,
         "revision_notes": notes if needs_revision else [],
+        "token_usage": {"quality_judge": usage},
     }

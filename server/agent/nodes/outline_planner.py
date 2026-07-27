@@ -1,8 +1,8 @@
-import json
 import logging
-import re
 
-from server.agent.llm import get_llm
+from pydantic import BaseModel, Field
+
+from server.agent.llm import LLMOutputError, LLMUnavailableError, invoke_json
 from server.agent.state import AgentState
 
 logger = logging.getLogger(__name__)
@@ -41,7 +41,19 @@ Output JSON only, no commentary, matching exactly:
 """
 
 
-_JSON_OBJECT_RE = re.compile(r"\{.*\}", re.DOTALL)
+class OutlineSection(BaseModel):
+    heading: str
+    level: int = 2
+    goals: str = ""
+    include_code: bool = False
+    include_mermaid: bool = False
+
+
+class Outline(BaseModel):
+    title: str = ""
+    description: str = ""
+    tags: list[str] = Field(default_factory=list)
+    sections: list[OutlineSection] = Field(default_factory=list)
 
 
 def _default_outline(topic: str) -> dict:
@@ -59,42 +71,25 @@ def _default_outline(topic: str) -> dict:
     }
 
 
-def _parse_outline(text: str, topic: str) -> dict:
-    match = _JSON_OBJECT_RE.search(text or "")
-    if not match:
+def _normalise(outline: Outline, topic: str) -> dict:
+    sections = [
+        {
+            "heading": s.heading.strip(),
+            "level": 1 if s.level == 1 else 2,
+            "goals": s.goals.strip(),
+            "include_code": s.include_code,
+            "include_mermaid": s.include_mermaid,
+        }
+        for s in outline.sections
+        if s.heading.strip()
+    ]
+    if not sections:
         return _default_outline(topic)
-    try:
-        data = json.loads(match.group(0))
-    except json.JSONDecodeError as exc:
-        logger.warning("outline_planner JSON parse failed: %s", exc)
-        return _default_outline(topic)
-
-    sections = data.get("sections")
-    if not isinstance(sections, list) or not sections:
-        return _default_outline(topic)
-
-    clean_sections = []
-    for s in sections:
-        if not isinstance(s, dict) or not str(s.get("heading", "")).strip():
-            continue
-        clean_sections.append(
-            {
-                "heading": str(s["heading"]).strip(),
-                "level": 1 if s.get("level") == 1 else 2,
-                "goals": str(s.get("goals", "")).strip(),
-                "include_code": bool(s.get("include_code")),
-                "include_mermaid": bool(s.get("include_mermaid")),
-            }
-        )
-    if not clean_sections:
-        return _default_outline(topic)
-
-    tags = data.get("tags")
     return {
-        "title": str(data.get("title") or topic.title()).strip(),
-        "description": str(data.get("description") or f"A practical tutorial on {topic}.").strip(),
-        "tags": [str(t) for t in tags if str(t).strip()] if isinstance(tags, list) and tags else [topic.lower()],
-        "sections": clean_sections,
+        "title": outline.title.strip() or topic.title(),
+        "description": outline.description.strip() or f"A practical tutorial on {topic}.",
+        "tags": [t for t in (tag.strip() for tag in outline.tags) if t] or [topic.lower()],
+        "sections": sections,
     }
 
 
@@ -103,13 +98,20 @@ async def outline_planner(state: AgentState) -> dict:
     merged = state.get("merged_content", "")
 
     try:
-        llm = get_llm("budget", temperature=0.2)
-        response = await llm.ainvoke(
-            OUTLINE_PROMPT.format(topic=topic, merged_content=merged or "(empty)")
+        outline, usage = await invoke_json(
+            "budget",
+            OUTLINE_PROMPT.format(topic=topic, merged_content=merged or "(empty)"),
+            Outline,
+            temperature=0.2,
         )
-        outline = _parse_outline(response.content or "", topic)
-    except Exception as exc:
-        logger.warning("outline_planner failed: %s", exc)
-        outline = _default_outline(topic)
+    except (LLMUnavailableError, LLMOutputError) as exc:
+        logger.warning("outline_planner failed, using default outline: %s", exc)
+        return {
+            "outline": _default_outline(topic),
+            "warnings": [f"outline_planner fell back to default outline: {exc}"],
+        }
 
-    return {"outline": outline}
+    return {
+        "outline": _normalise(outline, topic),
+        "token_usage": {"outline_planner": usage},
+    }

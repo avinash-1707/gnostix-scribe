@@ -1,11 +1,13 @@
-import json
 import logging
-import re
 
-from server.agent.llm import get_llm
+from pydantic import BaseModel, Field
+
+from server.agent.llm import LLMOutputError, LLMUnavailableError, invoke_json
 from server.agent.state import AgentState
 
 logger = logging.getLogger(__name__)
+
+MAX_IMAGES_PER_TOPIC = 2
 
 
 ANALYSE_PROMPT = """You are reviewing educational content about "{topic}" to decide where images would genuinely help.
@@ -30,47 +32,29 @@ SKIP only when:
 
 Hard cap: at most 2 images per topic. Pick the highest-value ones.
 
-For each concept that truly needs an image, output a JSON array (max 2 items):
-[
-  {{
-    "concept": "short concept name",
-    "prompt": "detailed image generation prompt — clean, minimal technical diagram, white background, clear labels, educational illustration style",
-    "placement_hint": "after section heading: <exact heading text>"
-  }}
-]
+Output JSON only, no commentary, matching exactly:
+{{
+  "images": [
+    {{
+      "concept": "short concept name",
+      "prompt": "detailed image generation prompt — clean, minimal technical diagram, white background, clear labels, educational illustration style",
+      "placement_hint": "after section heading: <exact heading text>"
+    }}
+  ]
+}}
 
-If no images are needed, output an empty array: []
-Output JSON only. No commentary.
+If no images are needed, output {{"images": []}}.
 """
 
 
-_JSON_ARRAY_RE = re.compile(r"\[.*\]", re.DOTALL)
+class ImageRequestItem(BaseModel):
+    concept: str
+    prompt: str
+    placement_hint: str = ""
 
 
-def _parse_json_array(text: str) -> list[dict]:
-    if not text:
-        return []
-    match = _JSON_ARRAY_RE.search(text)
-    if not match:
-        return []
-    try:
-        data = json.loads(match.group(0))
-    except json.JSONDecodeError as exc:
-        logger.warning("content_analyser JSON parse failed: %s", exc)
-        return []
-    if not isinstance(data, list):
-        return []
-    out: list[dict] = []
-    for item in data:
-        if isinstance(item, dict) and item.get("concept") and item.get("prompt"):
-            out.append(
-                {
-                    "concept": str(item["concept"]),
-                    "prompt": str(item["prompt"]),
-                    "placement_hint": str(item.get("placement_hint", "")),
-                }
-            )
-    return out
+class ImagePlan(BaseModel):
+    images: list[ImageRequestItem] = Field(default_factory=list)
 
 
 async def content_analyser(state: AgentState) -> dict:
@@ -80,18 +64,23 @@ async def content_analyser(state: AgentState) -> dict:
         return {"needs_images": False, "image_requests": []}
 
     try:
-        llm = get_llm("budget", temperature=0.1)
-        response = await llm.ainvoke(
-            ANALYSE_PROMPT.format(topic=topic, merged_content=content)
+        plan, usage = await invoke_json(
+            "budget",
+            ANALYSE_PROMPT.format(topic=topic, merged_content=content),
+            ImagePlan,
+            temperature=0.1,
         )
-        items = _parse_json_array(response.content or "")
-    except Exception as exc:
+    except (LLMUnavailableError, LLMOutputError) as exc:
         logger.warning("content_analyser failed: %s", exc)
-        items = []
+        return {
+            "needs_images": False,
+            "image_requests": [],
+            "warnings": [f"content_analyser skipped images: {exc}"],
+        }
 
-    items = items[:2]
-
+    items = [item.model_dump() for item in plan.images[:MAX_IMAGES_PER_TOPIC]]
     return {
         "needs_images": bool(items),
         "image_requests": items,
+        "token_usage": {"content_analyser": usage},
     }
