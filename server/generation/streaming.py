@@ -23,10 +23,14 @@ NODE_NAMES = frozenset(
         "tpointtech_scraper",
         "llm_knowledge",
         "content_merger",
+        "gap_filler",
+        "outline_planner",
         "content_analyser",
         "image_generator",
         "mdx_generator",
         "mdx_validator",
+        "mdx_fixer",
+        "quality_judge",
         "file_writer",
     }
 )
@@ -38,9 +42,15 @@ def _summarise(node: str, output: dict) -> str:
     if node == "topic_router":
         return f"resolved slug '{output.get('topic_slug', '')}'"
     if node == "gfg_scraper":
-        return f"GeeksForGeeks: {len(output.get('gfg_raw') or '')} chars"
+        return (
+            f"GeeksForGeeks: {len(output.get('gfg_raw') or '')} chars "
+            f"from {len(output.get('gfg_urls') or [])} page(s)"
+        )
     if node == "tpointtech_scraper":
-        return f"TpointTech: {len(output.get('tpointtech_raw') or '')} chars"
+        return (
+            f"TpointTech: {len(output.get('tpointtech_raw') or '')} chars "
+            f"from {len(output.get('tpointtech_urls') or [])} page(s)"
+        )
     if node == "llm_knowledge":
         return f"LLM knowledge: {len(output.get('llm_knowledge_raw') or '')} chars"
     if node == "content_merger":
@@ -48,6 +58,11 @@ def _summarise(node: str, output: dict) -> str:
             f"merged {len(output.get('merged_content') or '')} chars "
             f"(coverage_ok={output.get('coverage_ok')})"
         )
+    if node == "gap_filler":
+        return f"gap-fill content: {len(output.get('gap_content') or '')} chars"
+    if node == "outline_planner":
+        n = len((output.get("outline") or {}).get("sections") or [])
+        return f"planned {n} sections"
     if node == "content_analyser":
         n = len(output.get("image_requests") or [])
         return f"needs_images={output.get('needs_images')} ({n} requests)"
@@ -61,6 +76,18 @@ def _summarise(node: str, output: dict) -> str:
     if node == "mdx_validator":
         errs = output.get("validation_errors") or []
         return "validation OK" if output.get("validation_ok") else f"failed ({len(errs)} issues)"
+    if node == "mdx_fixer":
+        return (
+            f"patched draft to {len(output.get('mdx_draft') or '')} chars "
+            f"(attempt {output.get('generation_attempts')})"
+        )
+    if node == "quality_judge":
+        overall = output.get("judge_overall")
+        notes = output.get("revision_notes") or []
+        if not output.get("judge_scores"):
+            return "judge unavailable — passed through"
+        verdict = f"needs revision ({len(notes)} notes)" if notes else "approved"
+        return f"score {overall}/10 — {verdict}"
     if node == "file_writer":
         return f"wrote {output.get('output_path', '')}"
     return f"{node} done"

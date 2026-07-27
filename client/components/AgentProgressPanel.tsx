@@ -10,10 +10,14 @@ const NODE_ORDER: { name: string; label: string }[] = [
   { name: "tpointtech_scraper", label: "Scraping TpointTech" },
   { name: "llm_knowledge", label: "Generating LLM Knowledge" },
   { name: "content_merger", label: "Merging Content" },
+  { name: "gap_filler", label: "Filling Coverage Gaps" },
+  { name: "outline_planner", label: "Planning Outline" },
   { name: "content_analyser", label: "Analysing Content" },
   { name: "image_generator", label: "Generating Images" },
-  { name: "mdx_generator", label: "Generating MDX" },
+  { name: "mdx_generator", label: "Generating MDX Sections" },
   { name: "mdx_validator", label: "Validating MDX" },
+  { name: "mdx_fixer", label: "Fixing MDX Issues" },
+  { name: "quality_judge", label: "Judging Quality" },
   { name: "file_writer", label: "Writing Output File" },
 ];
 
