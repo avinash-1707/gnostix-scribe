@@ -1,34 +1,15 @@
-import asyncio
 import logging
 
-import trafilatura
-
+from server.agent.scrape import scrape_source
 from server.agent.state import AgentState
 
 logger = logging.getLogger(__name__)
 
 
-def _extract(url: str) -> str:
-    try:
-        downloaded = trafilatura.fetch_url(url)
-        if not downloaded:
-            return ""
-        text = trafilatura.extract(
-            downloaded,
-            include_comments=False,
-            include_tables=True,
-            no_fallback=False,
-            favor_precision=True,
-        )
-        return text or ""
-    except Exception as exc:
-        logger.warning("gfg_scraper extract failed for %s: %s", url, exc)
-        return ""
-
-
 async def gfg_scraper(state: AgentState) -> dict:
-    url = state.get("gfg_url", "")
-    if not url:
-        return {"gfg_raw": ""}
-    text = await asyncio.to_thread(_extract, url)
-    return {"gfg_raw": text}
+    topic = state.get("topic", "")
+    fallback = state.get("gfg_url", "")
+    if not topic and not fallback:
+        return {"gfg_raw": "", "gfg_urls": []}
+    text, used = await scrape_source("www.geeksforgeeks.org", topic, fallback)
+    return {"gfg_raw": text, "gfg_urls": used}
