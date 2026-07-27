@@ -109,17 +109,50 @@ async def stream_topic(
     start = time.perf_counter()
     node_starts: dict[str, float] = {}
     collected: dict = {}
+    progress_chars: dict[str, int] = {}
+    progress_last: dict[str, float] = {}
 
     config = {"configurable": {"thread_id": f"{topic[:48]}-{uuid.uuid4().hex[:8]}"}}
     try:
         async for ev in _graph.astream_events({"topic": topic}, config, version="v2"):
             kind = ev.get("event", "")
             name = ev.get("name", "")
+
+            # LLM token chunks: attribute to the graph node via metadata and
+            # surface throttled live-progress updates on the running row.
+            if kind == "on_chat_model_stream":
+                node = (ev.get("metadata") or {}).get("langgraph_node", "")
+                if node not in NODE_NAMES:
+                    continue
+                chunk = ev.get("data", {}).get("chunk")
+                content = getattr(chunk, "content", "") or ""
+                if not isinstance(content, str):
+                    content = str(content)
+                if not content:
+                    continue
+                progress_chars[node] = progress_chars.get(node, 0) + len(content)
+                now = time.perf_counter()
+                if now - progress_last.get(node, 0.0) < 0.5:
+                    continue
+                progress_last[node] = now
+                yield (
+                    NodeEvent(
+                        node=node,
+                        status="running",
+                        message=f"generating… {progress_chars[node]:,} chars",
+                        elapsed_ms=int((now - node_starts.get(node, start)) * 1000),
+                        topic=topic,
+                    ),
+                    None,
+                )
+                continue
+
             if name not in NODE_NAMES:
                 continue
 
             if kind == "on_chain_start":
                 node_starts[name] = time.perf_counter()
+                progress_chars.pop(name, None)
                 yield (
                     NodeEvent(
                         node=name,

@@ -1,11 +1,20 @@
+import asyncio
+import json
 import logging
 import re
+import shutil
+from pathlib import Path
 
 import frontmatter
 
 from server.agent.state import AgentState
 
 logger = logging.getLogger(__name__)
+
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_CLIENT_DIR = _REPO_ROOT / "client"
+_MDX_CHECK_SCRIPT = _CLIENT_DIR / "scripts" / "mdx-check.mjs"
+_COMPILE_TIMEOUT_S = 20.0
 
 
 VALID_CALLOUT_TYPES = {"tip", "note", "info", "warn", "danger"}
@@ -117,6 +126,60 @@ def _check_mermaid(body: str) -> list[str]:
     return errors
 
 
+_MERMAID_CHART_RE = re.compile(r"<Mermaid\s+chart=\{`(.*?)`\}", re.DOTALL | re.IGNORECASE)
+_MERMAID_TYPES = (
+    "graph", "flowchart", "sequencediagram", "classdiagram", "statediagram",
+    "erdiagram", "journey", "gantt", "pie", "mindmap", "timeline",
+)
+_BRACKET_PAIRS = {"(": ")", "[": "]", "{": "}"}
+
+
+def _check_mermaid_syntax(body: str) -> list[str]:
+    """Lightweight grammar sanity check — full parse needs a browser env."""
+    errors: list[str] = []
+    for m in _MERMAID_CHART_RE.finditer(body):
+        chart = m.group(1).strip()
+        first = chart.split("\n", 1)[0].strip().lower()
+        if not first.startswith(_MERMAID_TYPES):
+            errors.append(
+                f"<Mermaid> chart starts with '{first[:40]}' — not a known diagram type"
+            )
+            continue
+        counts = {open_: chart.count(open_) - chart.count(close)
+                  for open_, close in _BRACKET_PAIRS.items()}
+        unbalanced = [b for b, n in counts.items() if n != 0]
+        if unbalanced:
+            errors.append(f"<Mermaid> chart has unbalanced {'/'.join(unbalanced)} brackets")
+    return errors
+
+
+async def _compile_check(mdx: str) -> list[str]:
+    """Compile with the real MDX compiler (node subprocess). Advisory infra —
+    skipped silently when node or the script is unavailable."""
+    node = shutil.which("node")
+    if not node or not _MDX_CHECK_SCRIPT.exists():
+        return []
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            node,
+            str(_MDX_CHECK_SCRIPT),
+            cwd=_CLIENT_DIR,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        out, err = await asyncio.wait_for(
+            proc.communicate(mdx.encode("utf-8")), timeout=_COMPILE_TIMEOUT_S
+        )
+        verdict = json.loads(out.decode("utf-8") or "{}")
+    except Exception as exc:
+        logger.warning("mdx compile check unavailable: %s", exc)
+        return []
+    if verdict.get("ok"):
+        return []
+    return [f"MDX compile error: {verdict.get('error', 'unknown')}"]
+
+
 def _check_video(body: str) -> list[str]:
     if _VIDEO_RE.search(body):
         return ["<Video> component used but no video assets are provided"]
@@ -172,6 +235,7 @@ def _validate(mdx: str, image_srcs: set[str]) -> list[str]:
     errors += _check_callouts(body)
     errors += _check_figures(body, image_srcs)
     errors += _check_mermaid(body)
+    errors += _check_mermaid_syntax(body)
     errors += _check_video(body)
     errors += _check_raw_html(body)
     if _word_count_excluding_code(body) < 500:
@@ -189,6 +253,9 @@ async def mdx_validator(state: AgentState) -> dict:
         logger.info("mdx_validator auto-fixed mechanical issues")
 
     errors = _validate(fixed, image_srcs)
+    if not errors:
+        # Regex checks passed — run the real MDX compiler as the final gate.
+        errors = await _compile_check(fixed)
     result = {
         "validation_ok": len(errors) == 0,
         "validation_errors": errors,
