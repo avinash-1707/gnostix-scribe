@@ -8,6 +8,7 @@ if the run did not reach `file_writer`).
 
 import logging
 import time
+import uuid
 from collections.abc import AsyncIterator
 
 from server.agent.graph import compiled_graph
@@ -15,6 +16,14 @@ from server.agent.llm import merge_usage
 from server.schemas import NodeEvent
 
 logger = logging.getLogger(__name__)
+
+_graph = compiled_graph
+
+
+def set_compiled_graph(graph) -> None:
+    """Swap in a checkpointer-backed graph (called from the app lifespan)."""
+    global _graph
+    _graph = graph
 
 
 NODE_NAMES = frozenset(
@@ -101,8 +110,9 @@ async def stream_topic(
     node_starts: dict[str, float] = {}
     collected: dict = {}
 
+    config = {"configurable": {"thread_id": f"{topic[:48]}-{uuid.uuid4().hex[:8]}"}}
     try:
-        async for ev in compiled_graph.astream_events({"topic": topic}, version="v2"):
+        async for ev in _graph.astream_events({"topic": topic}, config, version="v2"):
             kind = ev.get("event", "")
             name = ev.get("name", "")
             if name not in NODE_NAMES:

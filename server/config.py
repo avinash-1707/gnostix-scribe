@@ -38,6 +38,14 @@ class Settings(BaseSettings):
 
     CLIENT_URL: str = "http://localhost:3001"
 
+    # LangGraph checkpointing (Postgres). Failure to connect at startup logs a
+    # warning and falls back to the in-memory (non-persistent) graph.
+    LANGGRAPH_CHECKPOINTS: bool = True
+
+    # LangSmith tracing (optional). Set the API key to enable.
+    LANGSMITH_API_KEY: str = ""
+    LANGSMITH_PROJECT: str = "gnostix-scribe"
+
     OUTPUT_DIR: Path = Field(
         default_factory=lambda: Path(__file__).resolve().parent.parent / "output" / "content"
     )

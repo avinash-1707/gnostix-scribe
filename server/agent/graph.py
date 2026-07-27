@@ -51,7 +51,7 @@ def _route_after_judge(state: AgentState) -> str:
     return "mdx_fixer" if state.get("revision_notes") else "file_writer"
 
 
-def build_graph():
+def build_graph(checkpointer=None):
     graph = StateGraph(AgentState)
 
     graph.add_node("topic_router", topic_router)
@@ -118,7 +118,9 @@ def build_graph():
 
     graph.add_edge("file_writer", END)
 
-    return graph.compile()
+    return graph.compile(checkpointer=checkpointer)
 
 
+# Default graph without persistence — main.py swaps in a checkpointed build
+# at startup when Postgres checkpointing is enabled.
 compiled_graph = build_graph()
