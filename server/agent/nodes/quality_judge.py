@@ -88,7 +88,7 @@ async def quality_judge(state: AgentState) -> dict:
     )
 
     try:
-        llm = get_llm(temperature=0.0)
+        llm = get_llm("judge", temperature=0.0)
         response = await llm.ainvoke(prompt)
         parsed = _parse_verdict(response.content or "")
     except Exception as exc:

@@ -103,7 +103,7 @@ async def outline_planner(state: AgentState) -> dict:
     merged = state.get("merged_content", "")
 
     try:
-        llm = get_llm(temperature=0.2)
+        llm = get_llm("budget", temperature=0.2)
         response = await llm.ainvoke(
             OUTLINE_PROMPT.format(topic=topic, merged_content=merged or "(empty)")
         )

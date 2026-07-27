@@ -80,7 +80,7 @@ async def content_analyser(state: AgentState) -> dict:
         return {"needs_images": False, "image_requests": []}
 
     try:
-        llm = get_llm(temperature=0.1)
+        llm = get_llm("budget", temperature=0.1)
         response = await llm.ainvoke(
             ANALYSE_PROMPT.format(topic=topic, merged_content=content)
         )

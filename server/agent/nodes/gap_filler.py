@@ -34,7 +34,7 @@ async def gap_filler(state: AgentState) -> dict:
     merged = state.get("merged_content", "")
 
     try:
-        llm = get_llm(temperature=0.4)
+        llm = get_llm("budget", temperature=0.4)
         response = await llm.ainvoke(
             GAP_PROMPT.format(topic=topic, merged_content=merged or "(empty)")
         )

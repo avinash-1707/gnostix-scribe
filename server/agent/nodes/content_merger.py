@@ -65,7 +65,7 @@ async def content_merger(state: AgentState) -> dict:
     )
 
     try:
-        llm = get_llm(temperature=0.2)
+        llm = get_llm("writer", temperature=0.2)
         response = await llm.ainvoke(prompt)
         merged = response.content or ""
     except Exception as exc:

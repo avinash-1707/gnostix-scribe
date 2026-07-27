@@ -74,7 +74,7 @@ async def mdx_fixer(state: AgentState) -> dict:
     )
 
     try:
-        llm = get_llm(temperature=0.1)
+        llm = get_llm("writer", temperature=0.1)
         response = await llm.ainvoke(prompt)
         fixed = _strip_code_fence_wrapper(response.content or "").strip()
     except Exception as exc:

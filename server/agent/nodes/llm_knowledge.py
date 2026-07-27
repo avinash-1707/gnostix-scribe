@@ -28,7 +28,7 @@ async def llm_knowledge(state: AgentState) -> dict:
     if not topic:
         return {"llm_knowledge_raw": ""}
     try:
-        llm = get_llm(temperature=0.4)
+        llm = get_llm("budget", temperature=0.4)
         response = await llm.ainvoke(PROMPT.format(topic=topic))
         return {"llm_knowledge_raw": response.content or ""}
     except Exception as exc:

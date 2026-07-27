@@ -27,6 +27,14 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     CLOUDINARY_URL: str = ""
 
+    # OpenRouter — when set, all text LLM calls route through it with per-tier
+    # models; when empty, falls back to direct Gemini via GOOGLE_API_KEY.
+    OPENROUTER_API_KEY: str = ""
+    OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
+    OPENROUTER_MODEL_BUDGET: str = ""  # defaults set in agent/llm.py
+    OPENROUTER_MODEL_WRITER: str = ""
+    OPENROUTER_MODEL_JUDGE: str = ""
+
     CLIENT_URL: str = "http://localhost:3001"
 
     OUTPUT_DIR: Path = Field(
